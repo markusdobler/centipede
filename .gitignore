@@ -1,0 +1,14 @@
+*.pyc
+venv
+*~
+*.log
+.*.sw?
+.DS_Store
+env
+secret-key.txt
+database.db
+database_*.db
+*.sql
+db_repository
+/resources
+/uploads

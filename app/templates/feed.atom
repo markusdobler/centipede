@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+ 
+<feed xmlns="http://www.w3.org/2005/Atom">
+{% autoescape True %}
+	<title>{{feed.title}}</title>
+	<subtitle>{{feed.subtitle}}</subtitle>
+	<link href="{{request.url}}" rel="self" />
+	<link href="{{feed.url}}" />
+	<id>{{request.url}}</id>
+	<updated>2002-10-02T10:00:00-05:00</updated>
+	<author><name>centipede feed aggregator</name></author>
+ 
+    {% for entry in entries %}
+	<entry>
+		<title>{{entry.title}}</title>
+		<link href="{{entry.link}}" />
+		<id>{{entry.id}}</id>
+		{% if entry.updated %}
+		<updated>{{entry.updated}}</updated>
+		{% endif %}
+		<content type="html">
+			{{entry.content|escape}}
+		</content>
+	</entry>
+	{% endfor %}
+ 
+{% endautoescape %}
+    </feed>
