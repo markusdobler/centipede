@@ -76,7 +76,7 @@ class TitanicRss(Feed):
         for f in [f for f in done if f.exception()]:
             logging.warning("Future failed: %s" % f.exception())
 
-class TitanicBriefeRss(Feed):
+class TitanicBriefe(Feed):
     def __init__(self):
         Feed.__init__(self, 'titanic_briefe', 'Titanic Briefe an die Leser',
                       'Titanic Briefe fulltext',
@@ -110,7 +110,7 @@ class TitanicBriefeRss(Feed):
         self.entries = [e for e in potential_entries if e]
 
 
-class TitanicFachmannRss(TitanicBriefeRss):
+class TitanicFachmann(TitanicBriefe):
     def __init__(self):
         Feed.__init__(self, 'titanic_fachmann', 'Titanic Vom Fachmann fuer Kenner',
                       'Titanic Fachmann fulltext',
@@ -185,8 +185,8 @@ class RivvaRss(Feed):
 
 
 titanic = TitanicRss()
-titanic_briefe = TitanicBriefeRss()
-titanic_fachmann = TitanicFachmannRss()
+titanic_briefe = TitanicBriefe()
+titanic_fachmann = TitanicFachmann()
 rivva = RivvaRss()
 
 if __name__ == '__main__':
