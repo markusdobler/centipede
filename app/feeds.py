@@ -5,7 +5,8 @@ from bs4 import BeautifulSoup
 import re
 from hashlib import sha1
 import logging
-
+from datetime import datetime
+import itertools
 
 thread_pool = futures.ThreadPoolExecutor(max_workers=10)
 
@@ -117,9 +118,76 @@ class TitanicFachmannRss(TitanicBriefeRss):
         self.url = 'http://www.titanic-magazin.de/fachmann/'
 
 
+class RivvaRss(Feed):
+    def __init__(self):
+        Feed.__init__(self, 'rivva', 'Rivva grouped',
+                      '6 hour blocks for Rivva',
+                      'http://rivva.de/')
+
+    def timeblock(self, timestamp):
+        return timestamp.replace(hour=timestamp.hour/6*6, minute=0, second=0)
+
+    
+    def parse_item(self, item):
+        rivva_link = item.link.string
+        soup = load_soup(rivva_link)
+        timestamp = item.pubdate.string
+        timestamp = timestamp.rsplit(' ', 1)[0] # remove timezone info
+        timestamp = datetime.strptime(timestamp, '%a, %d %b %Y %H:%M:%S')
+        if timestamp > self._current_timeblock:
+            raise "Timeblock still open. Keep aggregating"
+        link = soup.h1.a['href']
+        return dict(
+            link = link,
+            rivva_link = rivva_link,
+            title = item.title.string,
+            id = item.guid.string,
+            timestamp = timestamp,
+            timeblock = self.timeblock(timestamp),
+        )
+
+    def format_group(self, timeblock, items):
+        content = "<ul>%s</ul>" % "\n".join(
+            '<li><a href="%s">%s</a> (<a href="%s">via</a>)</li>' % (
+                i['link'], i['title'], i['rivva_link']
+            ) for i in items
+        )
+        return dict(
+            link = '',
+            title = 'Rivva %s..%02i:00' % (
+                timeblock.strftime('%Y-%m-%d, %H:%M'),
+                timeblock.hour+6),
+            id = items[0]['id'],
+            content = content
+        )
+
+    def crawl(self):
+        self._current_timeblock = self.timeblock(datetime.now())
+        rss_url = 'http://feeds.feedburner.com/rivva'
+        soup = load_soup(rss_url)
+
+        fs = [thread_pool.submit(self.parse_item, item) for item in
+                   soup('item')]
+
+        done, not_done = futures.wait(fs, timeout=5)
+        items = [f.result() for f in done if not f.exception()]
+
+        items.sort(key=lambda d: d['timestamp'])
+        groups = itertools.groupby(items, lambda d: d['timeblock'])
+        self.entries = [self.format_group(timeblock, list(items)) for timeblock, items
+                        in groups]
+
+        for f in not_done:
+            logging.info("Future not done: %s" % f)
+        for f in [f for f in done if f.exception()]:
+            logging.info("Future failed: %s" % f.exception())
+
+
+
 titanic = TitanicRss()
 titanic_briefe = TitanicBriefeRss()
 titanic_fachmann = TitanicFachmannRss()
+rivva = RivvaRss()
 
 if __name__ == '__main__':
     for feed in Feed.feeds.values():
