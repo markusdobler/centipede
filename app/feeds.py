@@ -4,6 +4,8 @@ import requests
 from bs4 import BeautifulSoup
 import re
 from hashlib import sha1
+import logging
+
 
 thread_pool = futures.ThreadPoolExecutor(max_workers=10)
 
@@ -69,9 +71,9 @@ class TitanicRss(Feed):
         self.entries = [f.result() for f in done if not f.exception()]
 
         for f in not_done:
-            print "not done", f
+            logging.warning("Future not done: %s" % f)
         for f in [f for f in done if f.exception()]:
-            print f.exception()
+            logging.warning("Future failed: %s" % f.exception())
 
 class TitanicBriefeRss(Feed):
     def __init__(self):

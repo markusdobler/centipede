@@ -10,9 +10,6 @@ def create_app(config_object_name='config'):
     app = Flask(__name__)
     app.config.from_object(config_object_name)
 
-    from models import db, create_tables
-    db.init_app(app)
-
     from routes import blueprints
     for bp in blueprints:
         app.register_blueprint(bp)
