@@ -7,6 +7,7 @@ from hashlib import sha1
 import logging
 from datetime import datetime
 import itertools
+from cachetools import LRUCache
 
 thread_pool = futures.ThreadPoolExecutor(max_workers=10)
 
@@ -20,14 +21,26 @@ def load_soup(url, timeout=None):
 
 class Feed(object):
     feeds = {}
-    def __init__(self, id, title, subtitle, url):
+    def __init__(self, id, title, subtitle, url, cache_size=100):
         self.id = id
         self.title = title
         self.subtitle = subtitle
         self.url = url
         self.entries = []
         Feed.feeds[id] = self
+        self._cache = LRUCache(cache_size)
 
+    def get_parsed_item(self, item):
+        link = item.link.string
+        print "%s:" % link
+        try:
+            parsed = self._cache[link]
+            print " from cache"
+        except:
+            parsed = self._cache[link] = self.parse_item(item)
+            print " remote"
+        print len(self._cache)
+        return parsed
 
 class TitanicRss(Feed):
     def __init__(self):
@@ -65,7 +78,7 @@ class TitanicRss(Feed):
         rss_url = 'http://www.titanic-magazin.de/ich.war.bei.der.waffen.rss'
         soup = load_soup(rss_url)
 
-        fs = [thread_pool.submit(self.parse_item, item) for item in
+        fs = [thread_pool.submit(self.get_parsed_item, item) for item in
                    soup('item')]
 
         done, not_done = futures.wait(fs, timeout=5)
@@ -122,7 +135,8 @@ class RivvaRss(Feed):
     def __init__(self):
         Feed.__init__(self, 'rivva', 'Rivva grouped',
                       '6 hour blocks for Rivva',
-                      'http://rivva.de/')
+                      'http://rivva.de/',
+                     cache_size=500)
 
     def timeblock(self, timestamp):
         return timestamp.replace(hour=timestamp.hour/6*6, minute=0, second=0)
@@ -166,7 +180,7 @@ class RivvaRss(Feed):
         rss_url = 'http://feeds.feedburner.com/rivva'
         soup = load_soup(rss_url)
 
-        fs = [thread_pool.submit(self.parse_item, item) for item in
+        fs = [thread_pool.submit(self.get_parsed_item, item) for item in
                    soup('item')]
 
         done, not_done = futures.wait(fs, timeout=5)
