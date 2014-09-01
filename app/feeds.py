@@ -191,6 +191,8 @@ class RivvaRss(Feed):
         self.entries = [self.format_group(timeblock, list(items)) for timeblock, items
                         in groups]
 
+        self.entries = self.entries[1:]
+
         for f in not_done:
             logging.info("Future not done: %s" % f)
         for f in [f for f in done if f.exception()]:
