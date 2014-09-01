@@ -32,14 +32,10 @@ class Feed(object):
 
     def get_parsed_item(self, item):
         link = item.link.string
-        print "%s:" % link
         try:
             parsed = self._cache[link]
-            print " from cache"
         except:
             parsed = self._cache[link] = self.parse_item(item)
-            print " remote"
-        print len(self._cache)
         return parsed
 
 class TitanicRss(Feed):
