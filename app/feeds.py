@@ -9,7 +9,6 @@ from datetime import datetime, timedelta
 import itertools
 from flask.ext.sqlalchemy import SQLAlchemy
 from sqlalchemy import Index
-from flask import current_app
 
 db = SQLAlchemy()
 
@@ -45,7 +44,7 @@ class Cache(db.Model):
         # wrap fun to also store key
         wrapped_fun = lambda key, *extra_args: (key, fun(key, *extra_args))
         # generate futures of fun(key, x_args) for all keys that are cache misses
-        args_list = zip(keys, *extra_args_list) if extra_args_list else keys
+        args_list = zip(keys, *extra_args_list) if extra_args_list else zip(keys)
         fs = [thread_pool.submit(wrapped_fun, *args)
               for (key,args) in zip(keys, args_list) if not cls.get(key)]
 
@@ -75,7 +74,9 @@ def load_url(url, timeout=None):
     return result.content
 
 def load_soup(url, timeout=None):
-    return BeautifulSoup(load_url(url, timeout))
+    html = load_url(url, timeout)
+    html = html.replace("</scr' + 'ipt>","")
+    return BeautifulSoup(html)
 
 def load_and_parse_rss_feed(url, timeout=None):
     soup = load_soup(url, timeout)
@@ -287,7 +288,6 @@ class DilbertRss(Feed):
                         for d in last_21_days]
 
         def load_and_parse(url):
-            print url
             soup = load_soup(url)
             imgs = soup.find_all('img')
             for img in imgs:
@@ -305,7 +305,7 @@ class DilbertRss(Feed):
             raise ('no image found')
 
         load_and_parse(urls[0])
-        print urls
+
         self.entries = Cache.get_or_calc(urls, load_and_parse)
 
 
