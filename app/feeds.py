@@ -41,18 +41,21 @@ class Cache(db.Model):
             return entry.obj
 
     @classmethod
-    def get_or_calc(cls, keys, fun, *extra_args):
+    def get_or_calc(cls, keys, fun, *extra_args_list):
         # wrap fun to also store key
-        wrapped_fun = lambda key, *args: (key, fun(key, *args))
+        wrapped_fun = lambda key, *extra_args: (key, fun(key, *extra_args))
         # generate futures of fun(key, x_args) for all keys that are cache misses
-        fs = [thread_pool.submit(wrapped_fun, key, *x_args)
-              for (key,x_args) in zip(keys, zip(*extra_args)) if not cls.get(key)]
+        args_list = zip(keys, *extra_args_list) if extra_args_list else keys
+        fs = [thread_pool.submit(wrapped_fun, *args)
+              for (key,args) in zip(keys, args_list) if not cls.get(key)]
+
         done, not_done = futures.wait(fs, timeout=5)
         results = [f.result() for f in done if not f.exception()]
 
         # store objects
         for (key, obj) in results:
-            cls.store(key, obj)
+            if obj:
+                cls.store(key, obj)
 
         # process errors
         for f in not_done:
