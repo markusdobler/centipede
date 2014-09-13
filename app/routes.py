@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template
-from feeds import Feed
+from feeds import Feed, db
 
 #------------------------------------------------------------------------------#
 # Controllers
@@ -8,6 +8,13 @@ from feeds import Feed
 bp = Blueprint('centipede', __name__, template_folder='templates')
 
 blueprints = [bp]
+
+@bp.record_once
+def init_db(state):
+    db.init_app(state.app)
+    db.app = state.app
+    with state.app.app_context():
+        db.create_all()
 
 @bp.route("/")
 def index():

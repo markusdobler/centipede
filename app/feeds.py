@@ -7,7 +7,63 @@ from hashlib import sha1
 import logging
 from datetime import datetime
 import itertools
-from cachetools import LRUCache
+from flask.ext.sqlalchemy import SQLAlchemy
+from sqlalchemy import Index
+from flask import current_app
+
+db = SQLAlchemy()
+
+def none2now(now=None):
+    return datetime.now() if now is None else now
+
+class DoNotCache(Exception):
+    pass
+
+class Cache(db.Model):
+    __tablename__ = 'centipede_cache'
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(1000), index=True)
+    obj = db.Column(db.PickleType())
+        
+    @classmethod
+    def store(cls, key, obj):
+        self = cls()
+        self.key = key
+        self.obj = obj
+        db.session.add(self)
+        db.session.commit()
+        return self
+
+    @classmethod
+    def get(cls, key):
+        entry = cls.query.filter_by(key=key).scalar()
+        if entry:
+            return entry.obj
+
+    @classmethod
+    def get_or_calc(cls, keys, fun, *extra_args):
+        # wrap fun to also store key
+        wrapped_fun = lambda key, *args: (key, fun(key, *args))
+        # generate futures of fun(key, x_args) for all keys that are cache misses
+        fs = [thread_pool.submit(wrapped_fun, key, *x_args)
+              for (key,x_args) in zip(keys, zip(*extra_args)) if not cls.get(key)]
+        done, not_done = futures.wait(fs, timeout=5)
+        results = [f.result() for f in done if not f.exception()]
+
+        # store objects
+        for (key, obj) in results:
+            cls.store(key, obj)
+
+        # process errors
+        for f in not_done:
+            logging.warning("Future not done: %s" % f)
+        for f in [f for f in done if f.exception()]:
+            if isinstance(f.exception(), DoNotCache):
+                continue
+            logging.warning("Future failed: %s" % f.exception())
+
+        return [cls.get(key) for key in keys]
+
 
 thread_pool = futures.ThreadPoolExecutor(max_workers=10)
 
@@ -18,6 +74,11 @@ def load_url(url, timeout=None):
 def load_soup(url, timeout=None):
     return BeautifulSoup(load_url(url, timeout))
 
+def load_and_parse_rss_feed(url, timeout=None):
+    soup = load_soup(url, timeout)
+    items = list(soup('item'))
+    urls = [unicode(i.link.string) for i in items]
+    return urls, items
 
 class Feed(object):
     feeds = {}
@@ -28,19 +89,22 @@ class Feed(object):
         self.url = url
         self.entries = []
         Feed.feeds[id] = self
-        self._cache = LRUCache(cache_size)
 
     def get_parsed_item(self, item):
-        link = item.link.string
-        print "%s:" % link
         try:
-            parsed = self._cache[link]
-            print " from cache"
-        except:
-            parsed = self._cache[link] = self.parse_item(item)
-            print " remote"
-        print len(self._cache)
-        return parsed
+            with db.app.app_context():
+                link = item.link.string
+                print "%s:" % link
+                try:
+                    parsed = WebsiteCache.get(self.id, link)
+                    print " from cache"
+                except:
+                    parsed = self.parse_item(item)
+                    WebsiteCache.store(self.id, link, parsed['text'])
+                    print " remote"
+        except Exception as e:
+            print e
+        return parsed.text
 
 class TitanicRss(Feed):
     def __init__(self):
@@ -61,33 +125,22 @@ class TitanicRss(Feed):
             if img['src'].startswith('http://'): continue
             img['src'] = "http://www.titanic-magazin.de/" + img['src']
 
-    def parse_item(self, item):
-        link = item.link.string
-        soup = load_soup(link)
-
-        self.fix_image_links(soup)
-
-        return dict(
-            link = link,
-            title = item.title.string,
-            id = item.guid.string,
-            content = self.extract_bodytext(soup),
-        )
-
     def crawl(self):
         rss_url = 'http://www.titanic-magazin.de/ich.war.bei.der.waffen.rss'
-        soup = load_soup(rss_url)
+        urls, items = load_and_parse_rss_feed(rss_url)
+        def load_and_parse(url, item):
+            link = url
+            soup = load_soup(link)
 
-        fs = [thread_pool.submit(self.get_parsed_item, item) for item in
-                   soup('item')]
+            self.fix_image_links(soup)
 
-        done, not_done = futures.wait(fs, timeout=5)
-        self.entries = [f.result() for f in done if not f.exception()]
-
-        for f in not_done:
-            logging.warning("Future not done: %s" % f)
-        for f in [f for f in done if f.exception()]:
-            logging.warning("Future failed: %s" % f.exception())
+            return dict(
+                link = link,
+                title = item.title.string,
+                id = item.guid.string,
+                content = self.extract_bodytext(soup),
+            )
+        self.entries = Cache.get_or_calc(urls, load_and_parse, items)
 
 class TitanicBriefe(Feed):
     def __init__(self):
@@ -142,20 +195,18 @@ class RivvaRss(Feed):
         return timestamp.replace(hour=timestamp.hour/6*6, minute=0, second=0)
 
     
-    def parse_item(self, item):
-        rivva_link = item.link.string
-        soup = load_soup(rivva_link)
+    def parse_item(self, soup, item):
         timestamp = item.pubdate.string
         timestamp = timestamp.rsplit(' ', 1)[0] # remove timezone info
         timestamp = datetime.strptime(timestamp, '%a, %d %b %Y %H:%M:%S')
         if timestamp > self._current_timeblock:
-            raise "Timeblock still open. Keep aggregating"
+            raise DoNotCache("Timeblock still open. Keep aggregating")
         link = soup.h1.a['href']
         return dict(
-            link = link,
-            rivva_link = rivva_link,
-            title = item.title.string,
-            id = item.guid.string,
+            link = unicode(link),
+            rivva_link = unicode(item.link.string),
+            title = unicode(item.title.string),
+            id = unicode(item.guid.string),
             timestamp = timestamp,
             timeblock = self.timeblock(timestamp),
         )
@@ -167,7 +218,6 @@ class RivvaRss(Feed):
             ) for i in items
         )
         return dict(
-            link = '',
             title = 'Rivva %s..%02i:00' % (
                 timeblock.strftime('%Y-%m-%d, %H:%M'),
                 timeblock.hour+6),
@@ -178,26 +228,22 @@ class RivvaRss(Feed):
     def crawl(self):
         self._current_timeblock = self.timeblock(datetime.now())
         rss_url = 'http://feeds.feedburner.com/rivva'
-        soup = load_soup(rss_url)
+        urls, items = load_and_parse_rss_feed(rss_url)
 
-        fs = [thread_pool.submit(self.get_parsed_item, item) for item in
-                   soup('item')]
+        def load_and_parse(url, item):
+            soup = load_soup(url)
+            return self.parse_item(soup, item)
 
-        done, not_done = futures.wait(fs, timeout=5)
-        items = [f.result() for f in done if not f.exception()]
+        parsed_items = Cache.get_or_calc(urls, load_and_parse, items)
 
-        items.sort(key=lambda d: d['timestamp'])
-        groups = itertools.groupby(items, lambda d: d['timeblock'])
-        self.entries = [self.format_group(timeblock, list(items)) for timeblock, items
+        parsed_items = [i for i in parsed_items if i]
+
+        parsed_items.sort(key=lambda d: d['timestamp'])
+        groups = itertools.groupby(parsed_items, lambda d: d['timeblock'])
+        self.entries = [self.format_group(timeblock, list(parsed_items)) for timeblock, parsed_items
                         in groups]
 
-        self.entries = self.entries[1:]
-
-        for f in not_done:
-            logging.info("Future not done: %s" % f)
-        for f in [f for f in done if f.exception()]:
-            logging.info("Future failed: %s" % f.exception())
-
+        self.entries = self.entries[1:]  # remove oldest group (which 
 
 
 titanic = TitanicRss()
