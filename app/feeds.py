@@ -93,7 +93,6 @@ class Feed(object):
         self.entries = []
         Feed.feeds[id] = self
 
-
 class TitanicRss(Feed):
     def __init__(self):
         Feed.__init__(self, 'titanic', 'Titanic RSS', 'Titanic fulltext',
