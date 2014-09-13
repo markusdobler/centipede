@@ -15,11 +15,11 @@
 		<title>{{entry.title}}</title>
 		{% if entry.link -%}
 		<link href="{{entry.link}}" />
-		{%- endif -%}
+		{% endif -%}
 		<id>{{entry.id}}</id>
 		{% if entry.updated -%}
 		<updated>{{entry.updated}}</updated>
-		{%- endif -%}
+		{% endif -%}
 		<content type="html">
 			{{entry.content|escape}}
 		</content>
