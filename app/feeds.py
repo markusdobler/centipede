@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 import re
 from hashlib import sha1
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import itertools
 from flask.ext.sqlalchemy import SQLAlchemy
 from sqlalchemy import Index
@@ -291,11 +291,46 @@ class DauJonesRss(Feed):
             )
         self.entries = Cache.get_or_calc(urls, load_and_parse, items)
 
+class DilbertRss(Feed):
+    def __init__(self):
+        Feed.__init__(self, 'dilbert', 'Dilbert', 'Dilbert images',
+                      'http://www.dilbert.com')
+
+    def crawl(self):
+        today = datetime.today()
+        last_21_days = (today+timedelta(days=n) for n in range(-20,1))
+        urls = [d.strftime('http://dilbert.com/strips/comic/%Y-%m-%d')
+                        for d in last_21_days]
+
+        def load_and_parse(url):
+            print url
+            soup = load_soup(url)
+            imgs = soup.find_all('img')
+            for img in imgs:
+                try:
+                    src = img.attrs['src']
+                    if 'strip.zoom' in src:
+                        return dict(
+                            link = url,
+                            title = "Dilbert for %s" % url.split('/')[-1],
+                            id = url,
+                            content = '<img src="http://dilbert.com%s">' % src,
+                        )
+                except:
+                    pass
+            raise ('no image found')
+
+        load_and_parse(urls[0])
+        print urls
+        self.entries = Cache.get_or_calc(urls, load_and_parse)
+
+
 titanic = TitanicRss()
 titanic_briefe = TitanicBriefe()
 titanic_fachmann = TitanicFachmann()
 rivva = RivvaRss()
 daujones = DauJonesRss()
+dilbert = DilbertRss()
 
 if __name__ == '__main__':
     for feed in Feed.feeds.values():
