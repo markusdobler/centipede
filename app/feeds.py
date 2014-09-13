@@ -246,10 +246,53 @@ class RivvaRss(Feed):
         self.entries = self.entries[1:]  # remove oldest group (which 
 
 
+class DauJonesRss(Feed):
+    def __init__(self):
+        Feed.__init__(self, 'daujones', 'Dau Jones', 'Dau Jones fulltext',
+                      'http://www.daujones.com')
+
+    def extract_bodytext(self, soup):
+        maincontent = soup.find('div', {'class': 'maincontent'})
+
+        # remove unwanted elements
+        for unwanted in (
+            ('div', {'class': 'rightnav'}),
+            ('form',),
+            ('center',),
+        ):
+            while maincontent.find(*unwanted) != None:
+                maincontent.find(*unwanted).extract()
+
+        # delete first two spans ('zurück'/'weiter' in header)
+        maincontent.span.extract()
+        maincontent.span.extract()
+
+        # find next span ('weiter' in footer) -> remove this and elements below
+        end = maincontent.span.previousSibling
+        while end.nextSibling != None:
+            end.nextSibling.extract()
+
+        return unicode(maincontent)
+
+    def crawl(self):
+        rss_url = 'http://www.daujones.com/daubeitraege.rss'
+        urls, items = load_and_parse_rss_feed(rss_url)
+        def load_and_parse(url, item):
+            soup = load_soup(url)
+
+            return dict(
+                link = url,
+                title = item.title.string,
+                id = url,
+                content = self.extract_bodytext(soup),
+            )
+        self.entries = Cache.get_or_calc(urls, load_and_parse, items)
+
 titanic = TitanicRss()
 titanic_briefe = TitanicBriefe()
 titanic_fachmann = TitanicFachmann()
 rivva = RivvaRss()
+daujones = DauJonesRss()
 
 if __name__ == '__main__':
     for feed in Feed.feeds.values():
