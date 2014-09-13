@@ -93,21 +93,6 @@ class Feed(object):
         self.entries = []
         Feed.feeds[id] = self
 
-    def get_parsed_item(self, item):
-        try:
-            with db.app.app_context():
-                link = item.link.string
-                print "%s:" % link
-                try:
-                    parsed = WebsiteCache.get(self.id, link)
-                    print " from cache"
-                except:
-                    parsed = self.parse_item(item)
-                    WebsiteCache.store(self.id, link, parsed['text'])
-                    print " remote"
-        except Exception as e:
-            print e
-        return parsed.text
 
 class TitanicRss(Feed):
     def __init__(self):
