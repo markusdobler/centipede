@@ -308,6 +308,28 @@ class DilbertRss(Feed):
 
         self.entries = Cache.get_or_calc(urls, load_and_parse)
 
+class PostillonRss(Feed):
+    def __init__(self):
+        Feed.__init__(self, 'postillon', 'Postillon', 'Ehrliche Nachrichten',
+                      'http://www.der-postillon.com/')
+
+    def extract_bodytext(self, item_soup):
+        return item_soup.find('div', {'class': 'post-body'})
+
+    def crawl(self):
+        rss_url = 'http://feeds.feedburner.com/blogspot/rkEL'
+        urls, items = load_and_parse_rss_feed(rss_url)
+        def load_and_parse(url, item):
+            link = url
+            soup = load_soup(link)
+
+            return dict(
+                link = link,
+                title = item.title.string,
+                id = item.guid.string,
+                content = self.extract_bodytext(soup),
+            )
+        self.entries = Cache.get_or_calc(urls, load_and_parse, items)
 
 titanic = TitanicRss()
 titanic_briefe = TitanicBriefe()
@@ -315,6 +337,7 @@ titanic_fachmann = TitanicFachmann()
 rivva = RivvaRss()
 daujones = DauJonesRss()
 dilbert = DilbertRss()
+postillon = PostillonRss()
 
 if __name__ == '__main__':
     for feed in Feed.feeds.values():
