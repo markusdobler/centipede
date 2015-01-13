@@ -124,8 +124,8 @@ class TitanicRss(Feed):
 
             return dict(
                 link = link,
-                title = item.title.string,
-                id = item.guid.string,
+                title = unicode(item.title.string),
+                id = unicode(item.guid.string),
                 content = self.extract_bodytext(soup),
             )
         self.entries = Cache.get_or_calc(urls, load_and_parse, items)
@@ -145,7 +145,7 @@ class TitanicBriefe(Feed):
     def parse_item(self, item_soup):
         try:
             content = self.extract_bodytext(item_soup)
-            title = item_soup.h1.string
+            title = unicode(item_soup.h1.string)
         except:
             return None
         if content:
@@ -270,7 +270,7 @@ class DauJonesRss(Feed):
 
             return dict(
                 link = url,
-                title = item.title.string,
+                title = unicode(item.title.string),
                 id = url,
                 content = self.extract_bodytext(soup),
             )
@@ -314,7 +314,7 @@ class PostillonRss(Feed):
                       'http://www.der-postillon.com/')
 
     def extract_bodytext(self, item_soup):
-        return item_soup.find('div', {'class': 'post-body'})
+        return unicode(item_soup.find('div', {'class': 'post-body'}))
 
     def crawl(self):
         rss_url = 'http://feeds.feedburner.com/blogspot/rkEL'
@@ -325,8 +325,8 @@ class PostillonRss(Feed):
 
             return dict(
                 link = link,
-                title = item.title.string,
-                id = item.guid.string,
+                title = unicode(item.title.string),
+                id = unicode(item.guid.string),
                 content = self.extract_bodytext(soup),
             )
         self.entries = Cache.get_or_calc(urls, load_and_parse, items)
