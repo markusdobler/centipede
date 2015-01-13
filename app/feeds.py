@@ -73,13 +73,13 @@ def load_url(url, timeout=None):
     result = requests.get(url, timeout=timeout)
     return result.content
 
-def load_soup(url, timeout=None):
+def load_soup(url, timeout=None, parser=None):
     html = load_url(url, timeout)
-    html = html.replace("</scr' + 'ipt>","")
-    return BeautifulSoup(html)
+    html = html.replace("</scr' + 'ipt>","")  # workaround for problem with bs4 on dilbert
+    return BeautifulSoup(html, features=parser)
 
 def load_and_parse_rss_feed(url, timeout=None):
-    soup = load_soup(url, timeout)
+    soup = load_soup(url, timeout, 'xml')
     items = list(soup('item'))
     urls = [unicode(i.link.string) for i in items]
     return urls, items
