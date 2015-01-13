@@ -184,7 +184,7 @@ class RivvaRss(Feed):
 
     
     def parse_item(self, soup, item):
-        timestamp = item.pubdate.string
+        timestamp = item.pubDate.string
         timestamp = timestamp.rsplit(' ', 1)[0] # remove timezone info
         timestamp = datetime.strptime(timestamp, '%a, %d %b %Y %H:%M:%S')
         if timestamp > self._current_timeblock:
