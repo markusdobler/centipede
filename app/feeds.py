@@ -329,6 +329,33 @@ class PostillonRss(Feed):
             )
         self.entries = Cache.get_or_calc(urls, load_and_parse, items)
 
+class TagespresseRss(Feed):
+    def __init__(self):
+        Feed.__init__(self, 'tagespresse', 'Tagespresse RSS', 'Tagespresse fulltext',
+                      'http://www.dietagespresse.com')
+
+    def extract_bodytext(self, item_soup):
+        headline = item_soup.find('h1')
+        main_div = headline.findParent('div')
+        return str(main_div)
+
+    def crawl(self):
+        rss_url = 'https://dietagespresse.com/feed/'
+        urls, items = load_and_parse_rss_feed(rss_url)
+        def load_and_parse(url, item):
+            link = url
+            soup = load_soup(link)
+
+            return dict(
+                link = link,
+                title = str(item.title.string),
+                id = str(item.guid.string),
+                content = self.extract_bodytext(soup),
+            )
+        #self.entries = [load_and_parse(u,i) for (u,i) in zip(urls, items)]
+        self.entries = Cache.get_or_calc(urls, load_and_parse, items)
+
+
 titanic = TitanicRss()
 titanic_briefe = TitanicBriefe()
 titanic_fachmann = TitanicFachmann()
@@ -336,6 +363,8 @@ rivva = RivvaRss()
 daujones = DauJonesRss()
 dilbert = DilbertRss()
 postillon = PostillonRss()
+tagespresse = TagespresseRss()
+
 
 if __name__ == '__main__':
     for feed in Feed.feeds.values():
