@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template
-from feeds import Feed, db
+from .feeds import Feed, db
 
 #------------------------------------------------------------------------------#
 # Controllers

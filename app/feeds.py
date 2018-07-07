@@ -7,7 +7,7 @@ from hashlib import sha1
 import logging
 from datetime import datetime, timedelta
 import itertools
-from flask.ext.sqlalchemy import SQLAlchemy
+from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import Index
 
 db = SQLAlchemy()
@@ -73,15 +73,15 @@ def load_url(url, timeout=None):
     result = requests.get(url, timeout=timeout)
     return result.content
 
-def load_soup(url, timeout=None, parser=None):
+def load_soup(url, timeout=None, parser='lxml'):
     html = load_url(url, timeout)
-    html = html.replace("</scr' + 'ipt>","")  # workaround for problem with bs4 on dilbert
+    html = html.replace(b"</scr' + 'ipt>",b"")  # workaround for problem with bs4 on dilbert
     return BeautifulSoup(html, features=parser)
 
 def load_and_parse_rss_feed(url, timeout=None):
     soup = load_soup(url, timeout, 'xml')
     items = list(soup('item'))
-    urls = [unicode(i.link.string) for i in items]
+    urls = [i.link.string for i in items]
     return urls, items
 
 class Feed(object):
@@ -103,10 +103,10 @@ class TitanicRss(Feed):
         news_bodytext = item_soup.find('div', {'class': 'tt_news-bodytext'})
         bodytexts = news_bodytext.find_all('p', {'class': 'bodytext'})
         if bodytexts:
-            return u"<div>\n%s\n</div>" % "\n".join(unicode(b) for b in bodytexts)
+            return u"<div>\n%s\n</div>" % "\n".join(str(b) for b in bodytexts)
         lists = news_bodytext.find_all('ul')
         if lists:
-            return u"<div>\n%s\n</div>" % "\n".join(unicode(l) for l in lists)
+            return u"<div>\n%s\n</div>" % "\n".join(str(l) for l in lists)
 
     def fix_image_links(self, soup):
         for img in soup('img'):
@@ -124,8 +124,8 @@ class TitanicRss(Feed):
 
             return dict(
                 link = link,
-                title = unicode(item.title.string),
-                id = unicode(item.guid.string),
+                title = str(item.title.string),
+                id = str(item.guid.string),
                 content = self.extract_bodytext(soup),
             )
         self.entries = Cache.get_or_calc(urls, load_and_parse, items)
@@ -140,12 +140,12 @@ class TitanicBriefe(Feed):
     def extract_bodytext(self, item_soup):
         bodytexts = item_soup.find_all('p', {'class': 'bodytext'})
         if bodytexts:
-            return u"<div>\n%s\n</div>" % "\n".join(unicode(b) for b in bodytexts)
+            return u"<div>\n%s\n</div>" % "\n".join(str(b) for b in bodytexts)
 
     def parse_item(self, item_soup):
         try:
             content = self.extract_bodytext(item_soup)
-            title = unicode(item_soup.h1.string)
+            title = str(item_soup.h1.string)
         except:
             return None
         if content:
@@ -180,7 +180,7 @@ class RivvaRss(Feed):
                      cache_size=500)
 
     def timeblock(self, timestamp):
-        return timestamp.replace(hour=timestamp.hour/6*6, minute=0, second=0)
+        return timestamp.replace(hour=timestamp.hour//6*6, minute=0, second=0)
 
     
     def parse_item(self, soup, item):
@@ -191,10 +191,10 @@ class RivvaRss(Feed):
             raise DoNotCache("Timeblock still open. Keep aggregating")
         link = soup.h1.a['href']
         return dict(
-            link = unicode(link),
-            rivva_link = unicode(item.link.string),
-            title = unicode(item.title.string),
-            id = unicode(item.guid.string),
+            link = str(link),
+            rivva_link = str(item.link.string),
+            title = str(item.title.string),
+            id = str(item.guid.string),
             timestamp = timestamp,
             timeblock = self.timeblock(timestamp),
         )
@@ -260,7 +260,7 @@ class DauJonesRss(Feed):
         while end.nextSibling != None:
             end.nextSibling.extract()
 
-        return unicode(maincontent)
+        return str(maincontent)
 
     def crawl(self):
         rss_url = 'http://www.daujones.com/daubeitraege.rss'
@@ -270,7 +270,7 @@ class DauJonesRss(Feed):
 
             return dict(
                 link = url,
-                title = unicode(item.title.string),
+                title = str(item.title.string),
                 id = url,
                 content = self.extract_bodytext(soup),
             )
@@ -314,7 +314,7 @@ class PostillonRss(Feed):
                       'http://www.der-postillon.com/')
 
     def extract_bodytext(self, item_soup):
-        return unicode(item_soup.find('div', {'class': 'post-body'}))
+        return str(item_soup.find('div', {'class': 'post-body'}))
 
     def crawl(self):
         rss_url = 'http://feeds.feedburner.com/blogspot/rkEL'
@@ -325,8 +325,8 @@ class PostillonRss(Feed):
 
             return dict(
                 link = link,
-                title = unicode(item.title.string),
-                id = unicode(item.guid.string),
+                title = str(item.title.string),
+                id = str(item.guid.string),
                 content = self.extract_bodytext(soup),
             )
         self.entries = Cache.get_or_calc(urls, load_and_parse, items)
@@ -342,4 +342,4 @@ postillon = PostillonRss()
 if __name__ == '__main__':
     for feed in Feed.feeds.values():
         feed.crawl()
-        print feed.entries
+        print(feed.entries)
