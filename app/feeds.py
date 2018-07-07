@@ -81,7 +81,7 @@ def load_soup(url, timeout=None, parser='lxml'):
 def load_and_parse_rss_feed(url, timeout=None):
     soup = load_soup(url, timeout, 'xml')
     items = list(soup('item'))
-    urls = [i.link.string for i in items]
+    urls = [str(i.link.string) for i in items]
     return urls, items
 
 class Feed(object):
@@ -100,13 +100,16 @@ class TitanicRss(Feed):
                       'http://www.titanic-magazin.de')
 
     def extract_bodytext(self, item_soup):
-        news_bodytext = item_soup.find('div', {'class': 'tt_news-bodytext'})
-        bodytexts = news_bodytext.find_all('p', {'class': 'bodytext'})
-        if bodytexts:
-            return u"<div>\n%s\n</div>" % "\n".join(str(b) for b in bodytexts)
-        lists = news_bodytext.find_all('ul')
-        if lists:
-            return u"<div>\n%s\n</div>" % "\n".join(str(l) for l in lists)
+        bodytext = item_soup.find('article', {'class': 'tt_news-entry'})
+        if not bodytext:
+            content = item_soup.find('section', {'id': 'content'})
+            bodytext = content.find('div', {'class': 'csc-default'})
+        mainmatter_end = bodytext.find('div', {'class': 'tt_news-category'})
+        if mainmatter_end:
+            backmatter = list(mainmatter_end.next_siblings)
+            for e in backmatter:
+               e.extract()
+        return str(bodytext)
 
     def fix_image_links(self, soup):
         for img in soup('img'):
@@ -137,30 +140,25 @@ class TitanicBriefe(Feed):
                       'http://www.titanic-magazin.de/briefe')
         self.url = 'http://www.titanic-magazin.de/briefe/'
 
-    def extract_bodytext(self, item_soup):
-        bodytexts = item_soup.find_all('p', {'class': 'bodytext'})
-        if bodytexts:
-            return u"<div>\n%s\n</div>" % "\n".join(str(b) for b in bodytexts)
-
     def parse_item(self, item_soup):
         try:
-            content = self.extract_bodytext(item_soup)
-            title = str(item_soup.h1.string)
+            title = str(item_soup.h1.extract().string)
+            content = str(item_soup)
         except:
             return None
         if content:
             return dict(
                     link = self.url,
                     title = title,
-                    id = sha1(repr(content)).hexdigest(),
+                    id = sha1(bytes(content, 'utf8')).hexdigest(),
                     content = content,
                 )
 
     def crawl(self):
         soup = load_soup(self.url)
-        heft_texts = soup.find_all('div', {'class': 'heft_text'})
-        items = [i for h in heft_texts for i in h.find_all('div', {'class': 'csc-default'})]
-        potential_entries = [self.parse_item(item) for item in items]
+        briefe = soup.find('div', id='briefe')
+        divs = briefe.find_all('div')
+        potential_entries = [self.parse_item(item) for item in divs]
         self.entries = [e for e in potential_entries if e]
 
 
