@@ -35,7 +35,7 @@ class Cache(db.Model):
 
     @classmethod
     def get(cls, key):
-        entry = cls.query.filter_by(key=key).scalar()
+        entry = cls.query.filter_by(key=key).first()
         if entry:
             return entry.obj
 
@@ -187,7 +187,10 @@ class RivvaRss(Feed):
         timestamp = datetime.strptime(timestamp, '%a, %d %b %Y %H:%M:%S')
         if timestamp > self._current_timeblock:
             raise DoNotCache("Timeblock still open. Keep aggregating")
-        link = soup.h1.a['href']
+        try:
+            link = soup.h2.a['href']
+        except:
+            link = "<no link>"
         return dict(
             link = str(link),
             rivva_link = str(item.link.string),
