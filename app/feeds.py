@@ -188,7 +188,7 @@ class RivvaRss(Feed):
         if timestamp > self._current_timeblock:
             raise DoNotCache("Timeblock still open. Keep aggregating")
         try:
-            link = soup.h2.a['href']
+            link = [h2.a['href'] for h2 in soup.find_all('h2') if h2.a][0]
         except:
             link = "<no link>"
         return dict(
